@@ -45,7 +45,7 @@ resource "aws_route_table_association" "public" {
 }
 
 # Security Groups
-resource "aws_security_group" "srihari_public_sg" {
+resource "aws_security_group" "jai_public_sg" {
   vpc_id = aws_vpc.main.id
 
   ingress {
@@ -70,14 +70,14 @@ resource "aws_security_group" "srihari_public_sg" {
   }
 }
 
-resource "aws_security_group" "srihari_private_sg" {
+resource "aws_security_group" "jai_private_sg" {
   vpc_id = aws_vpc.main.id
 
   ingress {
     from_port       = 0
     to_port         = 0
     protocol        = "-1"
-    security_groups = [aws_security_group.srihari_public_sg.id]
+    security_groups = [aws_security_group.jai_public_sg.id]
   }
 
   egress {
@@ -89,78 +89,78 @@ resource "aws_security_group" "srihari_private_sg" {
 }
 
 # EC2 Instances and ASG
-resource "aws_launch_template" "srihari_public_instance" {
-  name          = "srihari-public-instance-template"
+resource "aws_launch_template" "jai_public_instance" {
+  name          = "jai-public-instance-template"
   instance_type = "t2.micro"
   image_id      = "ami-055e3d4f0bbeb5878" # Amazon Linux 2 AMI
   iam_instance_profile {
-    name = aws_iam_instance_profile.srihari_public_role.name
+    name = aws_iam_instance_profile.jai_public_role.name
   }
-  vpc_security_group_ids = [aws_security_group.srihari_public_sg.id]
+  vpc_security_group_ids = [aws_security_group.jai_public_sg.id]
 }
 
-resource "aws_autoscaling_group" "srihari_public_asg" {
+resource "aws_autoscaling_group" "jai_public_asg" {
   desired_capacity    = 2
   max_size            = 3
   min_size            = 1
   vpc_zone_identifier = aws_subnet.public[*].id
   launch_template {
-    id      = aws_launch_template.srihari_public_instance.id
+    id      = aws_launch_template.jai_public_instance.id
     version = "$Latest"
   }
-  target_group_arns = [aws_lb_target_group.srihari_app_targets.arn]
+  target_group_arns = [aws_lb_target_group.jai_app_targets.arn]
 }
 
-resource "aws_instance" "srihari_private_instance" {
+resource "aws_instance" "jai_private_instance" {
   ami                    = "ami-055e3d4f0bbeb5878"
   instance_type          = "t2.micro"
   subnet_id              = aws_subnet.private[0].id
-  vpc_security_group_ids = [aws_security_group.srihari_private_sg.id]
+  vpc_security_group_ids = [aws_security_group.jai_private_sg.id]
 }
 
 # Load Balancers
-resource "aws_lb" "srihari_application" {
-  name               = "srihari-app-lb"
+resource "aws_lb" "jai_application" {
+  name               = "jai-app-lb"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.srihari_public_sg.id]
+  security_groups    = [aws_security_group.jai_public_sg.id]
   subnets            = aws_subnet.public[*].id
 }
 
-resource "aws_lb_target_group" "srihari_app_targets" {
-  name     = "srihari-app-targets"
+resource "aws_lb_target_group" "jai_app_targets" {
+  name     = "jai-app-targets"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 }
 
-resource "aws_lb_listener" "srihari_app_listener" {
-  load_balancer_arn = aws_lb.srihari_application.arn
+resource "aws_lb_listener" "jai_app_listener" {
+  load_balancer_arn = aws_lb.jai_application.arn
   port              = 80
   protocol          = "HTTP"
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.srihari_app_targets.arn
+    target_group_arn = aws_lb_target_group.jai_app_targets.arn
   }
 }
 
-resource "aws_lb" "srihari_network" {
-  name               = "srihari-net-lb"
+resource "aws_lb" "jai_network" {
+  name               = "jai-net-lb"
   internal           = true
   load_balancer_type = "network"
   subnets            = aws_subnet.private[*].id
 }
 
-resource "aws_lb_target_group" "srihari_network_targets" {
-  name     = "srihari-net-targets"
+resource "aws_lb_target_group" "jai_network_targets" {
+  name     = "jai-net-targets"
   port     = 80
   protocol = "TCP"
   vpc_id   = aws_vpc.main.id
 }
 
 # S3 Bucket
-resource "aws_s3_bucket" "srihari_private_bucket" {
-  bucket = "srihari-private-bucket"
+resource "aws_s3_bucket" "jai_private_bucket" {
+  bucket = "jai-private-bucket"
   acl    = "private"
   versioning {
     enabled = true
@@ -168,8 +168,8 @@ resource "aws_s3_bucket" "srihari_private_bucket" {
 }
 
 # IAM Role
-resource "aws_iam_role" "srihari_public_role" {
-  name               = "srihari-public-role"
+resource "aws_iam_role" "jai_public_role" {
+  name               = "jai-public-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -182,8 +182,8 @@ resource "aws_iam_role" "srihari_public_role" {
   })
 }
 
-resource "aws_iam_policy" "srihari_s3_access" {
-  name        = "srihari-s3-access"
+resource "aws_iam_policy" "jai_s3_access" {
+  name        = "jai-s3-access"
   description = "Full access to the S3 bucket"
   policy      = jsonencode({
     Version = "2012-10-17",
@@ -191,18 +191,18 @@ resource "aws_iam_policy" "srihari_s3_access" {
       {
         Action   = ["s3:*"],
         Effect   = "Allow",
-        Resource = [aws_s3_bucket.srihari_private_bucket.arn, "${aws_s3_bucket.srihari_private_bucket.arn}/*"]
+        Resource = [aws_s3_bucket.jai_private_bucket.arn, "${aws_s3_bucket.jai_private_bucket.arn}/*"]
       }
     ]
   })
 }
 
-resource "aws_iam_role_policy_attachment" "srihari_attach_policy" {
-  role       = aws_iam_role.srihari_public_role.name
-  policy_arn = aws_iam_policy.srihari_s3_access.arn
+resource "aws_iam_role_policy_attachment" "jai_attach_policy" {
+  role       = aws_iam_role.jai_public_role.name
+  policy_arn = aws_iam_policy.jai_s3_access.arn
 }
 
-resource "aws_iam_instance_profile" "srihari_public_role" {
-  name = "srihari-public-instance-profile"
-  role = aws_iam_role.srihari_public_role.name
+resource "aws_iam_instance_profile" "jai_public_role" {
+  name = "jai-public-instance-profile"
+  role = aws_iam_role.jai_public_role.name
 }
