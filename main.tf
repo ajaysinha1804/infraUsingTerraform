@@ -3,11 +3,12 @@ provider "aws" {
   region = "us-west-2"
 }
 
-# VPC and Subnets
+# VPC Creation
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
 }
 
+# Public Subnet Creation
 resource "aws_subnet" "public" {
   count = 2
   vpc_id                  = aws_vpc.main.id
@@ -16,6 +17,7 @@ resource "aws_subnet" "public" {
   availability_zone       = ["us-west-2a", "us-west-2b"][count.index]
 }
 
+# Private Subnet Creation
 resource "aws_subnet" "private" {
   count = 2
   vpc_id            = aws_vpc.main.id
@@ -23,7 +25,7 @@ resource "aws_subnet" "private" {
   availability_zone = ["us-west-2a", "us-west-2b"][count.index]
 }
 
-# Internet Gateway
+# Internet Gateway Creation
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 }
@@ -38,14 +40,15 @@ resource "aws_route_table" "public" {
   }
 }
 
+# Route Table Association for Public Subnet
 resource "aws_route_table_association" "public" {
   count          = 2
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
-# Security Groups
-resource "aws_security_group" "jai_public_sg" {
+# Security Group for Public Subnet
+resource "aws_security_group" "ajay_public_sg" {
   vpc_id = aws_vpc.main.id
 
   ingress {
@@ -70,14 +73,15 @@ resource "aws_security_group" "jai_public_sg" {
   }
 }
 
-resource "aws_security_group" "jai_private_sg" {
+# Security Group for Private Subnet
+resource "aws_security_group" "ajay_private_sg" {
   vpc_id = aws_vpc.main.id
 
   ingress {
     from_port       = 0
     to_port         = 0
     protocol        = "-1"
-    security_groups = [aws_security_group.jai_public_sg.id]
+    security_groups = [aws_security_group.ajay_public_sg.id]
   }
 
   egress {
@@ -88,88 +92,119 @@ resource "aws_security_group" "jai_private_sg" {
   }
 }
 
-# EC2 Instances and ASG
-resource "aws_launch_template" "jai_public_instance" {
-  name          = "jai-public-instance-template"
+# Launch Template for Public EC2 Instances
+resource "aws_launch_template" "ajay_public_instance" {
+  name          = "ajay-public-instance-template"
   instance_type = "t2.micro"
-  image_id      = "ami-055e3d4f0bbeb5878" # Amazon Linux 2 AMI
+  image_id      = "ami-055e3d4f0bbeb5878" 
   iam_instance_profile {
-    name = aws_iam_instance_profile.jai_public_role.name
+    name = aws_iam_instance_profile.ajay_public_role.name
   }
-  vpc_security_group_ids = [aws_security_group.jai_public_sg.id]
+  vpc_security_group_ids = [aws_security_group.ajay_public_sg.id]
 }
 
-resource "aws_autoscaling_group" "jai_public_asg" {
+# Auto Scaling Group for Public EC2 Instances
+resource "aws_autoscaling_group" "ajay_public_asg" {
   desired_capacity    = 2
   max_size            = 3
   min_size            = 1
-  vpc_zone_identifier = aws_subnet.public[*].id
+  vpc_zone_identifier = [
+    aws_subnet.public[0].id,
+    aws_subnet.public[1].id
+  ]
   launch_template {
-    id      = aws_launch_template.jai_public_instance.id
+    id      = aws_launch_template.ajay_public_instance.id
     version = "$Latest"
   }
-  target_group_arns = [aws_lb_target_group.jai_app_targets.arn]
+  target_group_arns = [aws_lb_target_group.ajay_app_targets.arn]
 }
 
-resource "aws_instance" "jai_private_instance" {
+# Private EC2 Instance
+resource "aws_instance" "ajay_private_instance" {
   ami                    = "ami-055e3d4f0bbeb5878"
   instance_type          = "t2.micro"
   subnet_id              = aws_subnet.private[0].id
-  vpc_security_group_ids = [aws_security_group.jai_private_sg.id]
+  vpc_security_group_ids = [aws_security_group.ajay_private_sg.id]
 }
 
-# Load Balancers
-resource "aws_lb" "jai_application" {
-  name               = "jai-app-lb"
+# Application Load Balancer
+resource "aws_lb" "ajay_application_lb" {
+  name               = "ajay-app-lb"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.jai_public_sg.id]
-  subnets            = aws_subnet.public[*].id
+  security_groups    = [aws_security_group.ajay_public_sg.id]
+  subnets            = [
+    aws_subnet.public[0].id,
+    aws_subnet.public[1].id
+  ]
 }
 
-resource "aws_lb_target_group" "jai_app_targets" {
-  name     = "jai-app-targets"
+# Target Group for Application Load Balancer
+resource "aws_lb_target_group" "ajay_app_targets" {
+  name     = "ajay-app-targets"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 }
 
-resource "aws_lb_listener" "jai_app_listener" {
-  load_balancer_arn = aws_lb.jai_application.arn
+# Listener for Application Load Balancer
+resource "aws_lb_listener" "ajay_app_listener" {
+  load_balancer_arn = aws_lb.ajay_application_lb.arn
   port              = 80
   protocol          = "HTTP"
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.jai_app_targets.arn
+    target_group_arn = aws_lb_target_group.ajay_app_targets.arn
   }
 }
 
-resource "aws_lb" "jai_network" {
-  name               = "jai-net-lb"
+# Network Load Balancer
+resource "aws_lb" "ajay_network_lb" {
+  name               = "ajay-net-lb"
   internal           = true
   load_balancer_type = "network"
-  subnets            = aws_subnet.private[*].id
+  subnets            = [
+    aws_subnet.private[0].id,
+    aws_subnet.private[1].id
+  ]
 }
 
-resource "aws_lb_target_group" "jai_network_targets" {
-  name     = "jai-net-targets"
+# Target Group for Network Load Balancer
+resource "aws_lb_target_group" "ajay_network_targets" {
+  name     = "ajay-net-targets"
   port     = 80
   protocol = "TCP"
   vpc_id   = aws_vpc.main.id
 }
 
+# Listener for Network Load Balancer
+resource "aws_lb_listener" "ajay_net_listener" {
+  load_balancer_arn = aws_lb.ajay_network_lb.arn
+  port              = 80
+  protocol          = "TCP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.ajay_network_targets.arn
+  }
+}
+
 # S3 Bucket
-resource "aws_s3_bucket" "jai_private_bucket" {
-  bucket = "jai-private-bucket"
-  acl    = "private"
-  versioning {
-    enabled = true
+resource "aws_s3_bucket" "ajay_private_bucket" {
+  bucket = "ajay-private-bucket"
+}
+
+# S3 Bucket Versioning
+resource "aws_s3_bucket_versioning" "ajay_private_bucket_versioning" {
+  bucket = aws_s3_bucket.ajay_private_bucket.bucket
+
+  versioning_configuration {
+    status = "Enabled"
   }
 }
 
 # IAM Role
-resource "aws_iam_role" "jai_public_role" {
-  name               = "jai-public-role"
+resource "aws_iam_role" "ajay_public_role" {
+  name               = "ajay-public-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -182,8 +217,9 @@ resource "aws_iam_role" "jai_public_role" {
   })
 }
 
-resource "aws_iam_policy" "jai_s3_access" {
-  name        = "jai-s3-access"
+# IAM Policy for S3 Access
+resource "aws_iam_policy" "ajay_s3_access" {
+  name        = "ajay-s3-access-unique"
   description = "Full access to the S3 bucket"
   policy      = jsonencode({
     Version = "2012-10-17",
@@ -191,18 +227,20 @@ resource "aws_iam_policy" "jai_s3_access" {
       {
         Action   = ["s3:*"],
         Effect   = "Allow",
-        Resource = [aws_s3_bucket.jai_private_bucket.arn, "${aws_s3_bucket.jai_private_bucket.arn}/*"]
+        Resource = [aws_s3_bucket.ajay_private_bucket.arn, "${aws_s3_bucket.ajay_private_bucket.arn}/*"]
       }
     ]
   })
 }
 
-resource "aws_iam_role_policy_attachment" "jai_attach_policy" {
-  role       = aws_iam_role.jai_public_role.name
-  policy_arn = aws_iam_policy.jai_s3_access.arn
+# Attach IAM Policy to Role
+resource "aws_iam_role_policy_attachment" "ajay_attach_policy" {
+  role       = aws_iam_role.ajay_public_role.name
+  policy_arn = aws_iam_policy.ajay_s3_access.arn
 }
 
-resource "aws_iam_instance_profile" "jai_public_role" {
-  name = "jai-public-instance-profile"
-  role = aws_iam_role.jai_public_role.name
+# IAM Instance Profile
+resource "aws_iam_instance_profile" "ajay_public_role" {
+  name = "ajay-public-instance-profile-unique"
+  role = aws_iam_role.ajay_public_role.name
 }
